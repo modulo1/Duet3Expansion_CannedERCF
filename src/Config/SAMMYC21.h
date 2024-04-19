@@ -15,28 +15,69 @@
 
 // General features
 #define HAS_VREF_MONITOR		0
-#define HAS_VOLTAGE_MONITOR		0
+#define HAS_VOLTAGE_MONITOR		1
 #define HAS_12V_MONITOR			0
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_ADDRESS_SWITCHES	0
 #define HAS_BUTTONS				1
-#define USE_SERIAL_DEBUG		1
+#define USE_SERIAL_DEBUG		0
 
 // Drivers configuration
 #define SUPPORT_DRIVERS			1
-#define HAS_SMART_DRIVERS		0
-#define HAS_STALL_DETECT		0
-#define SINGLE_DRIVER			1
-#define SUPPORT_SLOW_DRIVERS	1
+#define HAS_SMART_DRIVERS		1
+#define HAS_STALL_DETECT		1
+#define SINGLE_DRIVER			0
+#define SUPPORT_SLOW_DRIVERS	0
 #define SUPPORT_DELTA_MOVEMENT	0
 #define DEDICATED_STEP_TIMER	1
 
 #define SUPPORT_TMC51xx			0
 #define SUPPORT_TMC2160			0
 #define SUPPORT_TMC2660			0
-#define SUPPORT_TMC22xx			0
+#define SUPPORT_TMC22xx			1
 
-constexpr size_t NumDrivers = 1;
+constexpr size_t NumDrivers = 2;
+
+// includes for CannedERCF
+
+#define TMC22xx_USES_SERCOM				1
+#define TMC22xx_HAS_MUX					0
+#define TMC22xx_SINGLE_DRIVER			0
+#define TMC22xx_HAS_ENABLE_PINS			0
+#define TMC22xx_VARIABLE_NUM_DRIVERS	0
+#define TMC22xx_USE_SLAVEADDR			1
+#define TMC22xx_DEFAULT_STEALTHCHOP		0
+
+constexpr Pin GlobalTmc22xxEnablePin = PortAPin(9);
+
+constexpr uint8_t TMC22xxSercomNumber = 3;
+Sercom * const SERCOM_TMC22xx = SERCOM3;
+
+constexpr Pin TMC22xxSercomTxPin = PortAPin(22);
+constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::C;
+constexpr Pin TMC22xxSercomRxPin = PortAPin(20);
+constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
+constexpr uint8_t TMC22xxSercomRxPad = 2;
+
+constexpr uint32_t DriversBaudRate = 100000;		// Use lower to allow for an inferior design than the 1LC. Old value is 200000;
+constexpr uint32_t TransferTimeout = 10;
+
+constexpr Pin VinMonitorPin = PortAPin(3);
+constexpr float VinDividerRatio = (47 /*60.4*/ + 4.7)/4.7;
+constexpr float VinMonitorVoltageRange = VinDividerRatio * 5.0;				// we use the 5V supply as the voltage reference
+constexpr size_t VinReadingsAveraged = 8;
+
+constexpr size_t MaxSmartDrivers = NumDrivers;
+
+constexpr float DriverSenseResistor = 0.091 + 0.02 + 0.003;					// in ohms. Added the 0.003 to make the max current a round 1600mA.
+constexpr float DriverVRef = 180.0;											// in mV
+constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
+constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
+constexpr float MaximumMotorCurrent = 1600.0;
+//constexpr float MaximumStandstillCurrent = 1200.0;
+constexpr uint32_t DefaultStandstillCurrentPercent = 75;
+
+// end CannedERCF include
 
 #define USE_CCL		0			// USE_CCL also requires DIFFERENTIAL_STEPPER_OUTPUTS
 
@@ -55,10 +96,19 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #else
 
+// CannedERCF change
+
+//PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
+//constexpr Pin EnablePins[NumDrivers] = { PortAPin(9) };
+//constexpr Pin StepPins[NumDrivers] = { PortAPin(11) };
+//constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
+
 PortGroup * const StepPio = &(PORT->Group[0]);		// the PIO that all the step pins are on
-constexpr Pin EnablePins[NumDrivers] = { PortAPin(9) };
-constexpr Pin StepPins[NumDrivers] = { PortAPin(11) };
-constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
+constexpr Pin StepPins[NumDrivers] = { PortAPin(11), PortAPin(13) };
+constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10), PortAPin(8) };
+constexpr Pin DriverDiagPins[NumDrivers] = { PortAPin(6), PortAPin(7) };
+
+// end change
 
 // The SAMC21 can sink more current than it can source, therefore we use active low signals to drive external drivers
 #define ACTIVE_HIGH_STEP		0		// 1 = active high, 0 = active low
@@ -67,11 +117,11 @@ constexpr Pin DirectionPins[NumDrivers] = { PortAPin(10) };
 
 #endif
 
-#define SUPPORT_THERMISTORS		1
-#define SUPPORT_SPI_SENSORS		1
-#define SUPPORT_I2C_SENSORS		1
-#define SUPPORT_LIS3DH			1
-#define SUPPORT_LDC1612			1
+#define SUPPORT_THERMISTORS		0
+#define SUPPORT_SPI_SENSORS		0
+#define SUPPORT_I2C_SENSORS		0
+#define SUPPORT_LIS3DH			0
+#define SUPPORT_LDC1612			0
 #define SUPPORT_DHT_SENSOR		0
 #define SUPPORT_SDADC			0
 
@@ -84,10 +134,10 @@ constexpr bool UseAlternateCanPins = true;
 
 constexpr size_t MaxPortsPerHeater = 1;
 
-constexpr size_t NumThermistorInputs = 2;
+constexpr size_t NumThermistorInputs = 0;
 constexpr float DefaultThermistorSeriesR = 2200.0;
 
-constexpr Pin TempSensePins[NumThermistorInputs] = { PortAPin(2), PortAPin(3) };
+//constexpr Pin TempSensePins[NumThermistorInputs] = {PortBPin(8)};
 
 constexpr Pin CanStandbyPin = PortAPin(27);
 
@@ -140,21 +190,21 @@ constexpr PinDescription PinTable[] =
 	// Port A
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA00 not on board
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA01 not on board
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_0,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"temp0"		},	// PA02 thermistor
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_1,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"temp1"		},	// PA03 thermistor
-	{ TcOutput::none,	TccOutput::tcc0_0E,	AdcInput::adc0_4,	AdcInput::none,		SercomIo::none,		SercomIo::none,		4,	"pa04"		},	// PA04
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_5,	AdcInput::none,		SercomIo::none,		SercomIo::none,		5,	"pa05"		},	// PA05
-	{ TcOutput::none,	TccOutput::tcc1_0E,	AdcInput::adc0_6,	AdcInput::none,		SercomIo::none,		SercomIo::none,		6,	"pa06"		},	// PA06
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_7,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	"pa07"		},	// PA07
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_8,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa08"		},	// PA08
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_9,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA09 driver EN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA10 driver DIR
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA11 driver STEP
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		2,	"io2.in"		},	// PA02 thermistor
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_1,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.vin"		},	// PA03 thermistor
+	{ TcOutput::none,	TccOutput::tcc0_0E,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		4,	"io0.out"		},	// PA04
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_5,	AdcInput::none,		SercomIo::none,		SercomIo::none,		5,	"io3.in"		},	// PA05
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		6,	"ate.d0.diag"		},	// PA06 driver 0 DIAG
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	"ate.d1.diag"		},	// PA07 driver 1 DIAG
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d1.dir"		},	// PA08 driver 1 DIR
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA09 driver 0 & 1 EN
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d0.dir"		},	// PA10 driver 0 DIR
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d0.step"		},	// PA11 driver 0 STEP
 	{ TcOutput::none,	TccOutput::tcc2_0E,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		12,	"pa12"	 	},	// PA12
 #if SUPPORT_LIS3DH
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		13,	nullptr		},	// PA13 accelerometer INT1
 #else
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		13,	"pa13"		},	// PA13
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"ate.d1.step"		},	// PA13 driver 1 STEP
 #endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA14 crystal
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA15 crystal
@@ -165,16 +215,16 @@ constexpr PinDescription PinTable[] =
 #else
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::sercom1c,	0,	"pa16"		},	// PA16
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::sercom1c,	SercomIo::none,		1,	"pa17"		},	// PA17
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		2,	"pa18"	 	},	// PA18
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa18"	 	},	// PA18
 #endif
-	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"pa19"		},	// PA19
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa20"		},	// PA20
+	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	"io1.in"		},	// PA19
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA20
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa21"		},	// PA21 LDC1612 INT
 #if SUPPORT_I2C_SENSORS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA22 I2C
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA23 I2C
 #else
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa22"		},	// PA22 (has TC0.0 on that pin but can't control the frequency well)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PA22 (has TC0.0 on that pin but can't control the frequency well)
 	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa23"		},	// PA23
 #endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	"pa24"		},	// PA24
@@ -195,17 +245,10 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PB05 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PB06 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PB07 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		8,	"pb08"		},	// PB08
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc0_2,	AdcInput::none,		SercomIo::none,		SercomIo::none,		8,	nullptr		},	// PB08
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,		9,	"!^button0"	},	// PB09 button recognised by bootloader
 	// PB22/23 are used for CAN0, PB10/11 for CAN1
 
-	// Virtual pins
-#if SUPPORT_LIS3DH
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		AdcInput::none,		SercomIo::none,		SercomIo::none,	Nx,	"i2c.lis3dh"		},	// LIS3DH sensor connected via I2C
-#endif
-#if SUPPORT_LDC1612
-	{ TcOutput::none,	TccOutput::none,	AdcInput::ldc1612,	AdcInput::none,		SercomIo::none,		SercomIo::none,	Nx,	"i2c.ldc1612"		},	// LDC1612 sensor connected via I2C
-#endif
 };
 
 constexpr size_t NumPins = ARRAY_SIZE(PinTable);
